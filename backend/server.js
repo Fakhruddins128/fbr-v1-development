@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 5001; // Changed to port 5001 to avoid conflict
 app.use(
   cors({
     origin: [
-      "https://fbr-v1.vercel.app", // your frontend domain
+      "https://fbr-v1-development.vercel.app", // your frontend domain
       "http://localhost:3000", // local frontend
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
@@ -35,7 +35,7 @@ const dbConfig = {
   user: process.env.DB_USER || "sa",
   password: process.env.DB_PASSWORD || "YourStrongPassword",
   server: process.env.DB_HOST || "localhost",
-  database: process.env.DB_NAME || "FBR_SaaS",
+  database: process.env.DB_NAME || "FBR_SaaS_testing",
   port: parseInt(process.env.DB_PORT) || 1433,
   options: {
     encrypt: false, // for local SQL Server
