@@ -16,11 +16,22 @@ const PORT = process.env.PORT || 5001; // Changed to port 5001 to avoid conflict
 // Middleware
 app.use(
   cors({
-    origin: [
-      "https://fbr-v1-development.vercel.app", // your frontend domain
-      "http://localhost:3000", // local frontend
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const allowedOrigins = new Set([
+        "https://fbr-v1-development.vercel.app",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+      ]);
+
+      if (allowedOrigins.has(origin)) return callback(null, true);
+
+      const localhostPattern = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+      if (localhostPattern.test(origin)) return callback(null, true);
+
+      return callback(new Error(`CORS blocked origin: ${origin}`));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true, // if using cookies or auth headers
   })
 );
