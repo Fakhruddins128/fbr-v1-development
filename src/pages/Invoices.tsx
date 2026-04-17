@@ -48,6 +48,7 @@ import { Invoice, InvoiceItem, Company } from '../types';
 import { invoiceAPI } from '../services/invoiceApi';
 import { customerApi, Customer } from '../api/customerApi';
 import { inventoryApi, InventoryItem } from '../services/inventoryApi';
+import { API_BASE_URL } from '../services/api';
 import { useAppSelector, useAppDispatch } from '../hooks/useAppDispatch';
 import { fetchCompanies, fetchCompanyById } from '../store/slices/companySlice';
 
@@ -177,7 +178,7 @@ const Invoices: React.FC = () => {
     try {
       // Create a temporary auth token with the selected company ID for super admin
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/customers`, {
+      const response = await fetch(`${API_BASE_URL}/api/customers`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -204,7 +205,7 @@ const Invoices: React.FC = () => {
     try {
       // Create a temporary auth token with the selected company ID for super admin
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/inventory`, {
+      const response = await fetch(`${API_BASE_URL}/api/inventory`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

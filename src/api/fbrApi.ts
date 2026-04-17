@@ -11,9 +11,7 @@ import {
   SroScheduleApiResponse,
   SaleTypeRateApiResponse
 } from '../types';
-
-// Backend API Configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+import { API_BASE_URL } from '../services/api';
 
 // FBR API Configuration
 const API_CONFIG = {
