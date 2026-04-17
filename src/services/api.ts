@@ -8,11 +8,10 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   if (isLocalFrontend) {
     const envIsLocalApi =
       typeof envApiBaseUrl === 'string' &&
-      (envApiBaseUrl.startsWith('http://localhost') || envApiBaseUrl.startsWith('http://127.0.0.1'));
+      (envApiBaseUrl.startsWith('http://localhost') ||
+        envApiBaseUrl.startsWith('http://127.0.0.1'));
 
-    if (!envIsLocalApi) {
-      resolvedApiBaseUrl = 'http://localhost:5001';
-    }
+    resolvedApiBaseUrl = envIsLocalApi ? envApiBaseUrl! : '';
   }
 }
 
