@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 5001; // Changed to port 5001 to avoid conflict
 app.use(
   cors({
     origin: [
-      "https://fbr-v1.vercel.app", // your frontend domain
+      "https://fbr-v1-development.vercel.app", // your frontend domain
       "http://localhost:3000", // local frontend
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
