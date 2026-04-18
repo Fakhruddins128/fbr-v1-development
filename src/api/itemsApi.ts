@@ -62,7 +62,7 @@ class ItemsApi {
     };
     
     if (token) {
-      headers['Authorization'] = `${token}`;
+      headers['Authorization'] = `Bearer ${token}`;
     }
     
     if (selectedCompanyId) {
