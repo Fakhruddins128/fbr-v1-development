@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../services/api';
+import {API_FBR_URL} from '../services/api';
 
 export interface Item {
   itemId: string;
@@ -73,7 +74,7 @@ class ItemsApi {
 
   async getUnitOfMeasurements(): Promise<UnitOfMeasurementsResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/fbr/uom`, {
+      const response = await fetch(`${API_FBR_URL}/api/fbr/uom`, {
         method: 'GET',
         headers: this.getAuthHeaders(),
       });
