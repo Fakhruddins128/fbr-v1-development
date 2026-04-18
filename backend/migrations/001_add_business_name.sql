@@ -1,6 +1,0 @@
-IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Companies' AND COLUMN_NAME = 'BusinessNameForSalesInvoice')
-BEGIN
-    ALTER TABLE Companies
-    ADD BusinessNameForSalesInvoice NVARCHAR(255) NULL;
-END
-GO
