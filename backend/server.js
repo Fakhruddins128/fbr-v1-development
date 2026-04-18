@@ -14,14 +14,30 @@ const app = express();
 const PORT = process.env.PORT || 5001; // Changed to port 5001 to avoid conflict
 
 // Middleware
+const allowedOrigins = [
+  "https://fbr-v1-development.vercel.app",
+  "http://localhost:3000",
+];
+
 app.use(
   cors({
-    origin: [
-      "https://fbr-v1-development.vercel.app", // your frontend domain
-      "http://localhost:3000", // local frontend
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true, // if using cookies or auth headers
+    origin: (origin, callback) => {
+      // Allow non-browser clients and same-origin requests
+      if (!origin) return callback(null, true);
+
+      const isAllowedExact = allowedOrigins.includes(origin);
+      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(
+        origin
+      );
+
+      if (isAllowedExact || isLocalhost) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
   })
 );
 app.use(bodyParser.json());
