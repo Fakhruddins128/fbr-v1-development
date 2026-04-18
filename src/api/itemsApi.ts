@@ -62,7 +62,7 @@ class ItemsApi {
     };
     
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers['Authorization'] = `${token}`;
     }
     
     if (selectedCompanyId) {
@@ -74,7 +74,7 @@ class ItemsApi {
 
   async getUnitOfMeasurements(): Promise<UnitOfMeasurementsResponse> {
     try {
-      const response = await fetch(`${API_FBR_URL}/api/fbr/uom`, {
+      const response = await fetch(`${API_FBR_URL}`, {
         method: 'GET',
         headers: this.getAuthHeaders(),
       });
