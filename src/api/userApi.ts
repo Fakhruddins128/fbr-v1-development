@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../services/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 export interface User {
   id: string;

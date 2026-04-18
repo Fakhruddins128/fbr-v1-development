@@ -130,9 +130,7 @@ const Login: React.FC = () => {
               autoComplete="username"
               autoFocus
               value={username}
-              onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-                setUsername(e.target.value)
-              }
+              onChange={(e) => setUsername(e.target.value)}
               error={!!formErrors.username}
               helperText={formErrors.username}
             />
@@ -147,9 +145,7 @@ const Login: React.FC = () => {
               id="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-                setPassword(e.target.value)
-              }
+              onChange={(e) => setPassword(e.target.value)}
               error={!!formErrors.password}
               helperText={formErrors.password}
             />
@@ -170,7 +166,7 @@ const Login: React.FC = () => {
             
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
               <Typography variant="body2" color="text.secondary">
-                Development Version 1.1.0
+                Version 1.1.0
               </Typography>
             </Box>
           </Box>
