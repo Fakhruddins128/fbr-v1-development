@@ -39,6 +39,18 @@ export interface ItemResponse {
   error?: string;
 }
 
+export interface UnitOfMeasurement {
+  code: string;
+  description?: string;
+}
+
+export interface UnitOfMeasurementsResponse {
+  success: boolean;
+  data?: UnitOfMeasurement[];
+  message?: string;
+  error?: string;
+}
+
 class ItemsApi {
   private getAuthHeaders() {
     const token = localStorage.getItem('auth_token');
@@ -57,6 +69,29 @@ class ItemsApi {
     }
     
     return headers;
+  }
+
+  async getUnitOfMeasurements(): Promise<UnitOfMeasurementsResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/fbr/uom`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error: any) {
+      console.error('Error fetching units of measurement:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to fetch units of measurement',
+        error: error.message,
+      };
+    }
   }
 
   async getAllItems(): Promise<ItemResponse> {

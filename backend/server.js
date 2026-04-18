@@ -5,6 +5,7 @@ const sql = require("mssql");
 const dotenv = require("dotenv");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const axios = require("axios");
 
 // Load environment variables
 dotenv.config();
@@ -2477,6 +2478,119 @@ app.delete(
   }
 );
 
+app.get("/api/fbr/uom", authenticateToken, async (req, res) => {
+  try {
+    let companyId = req.user.companyId;
+    if (req.user.role === "SUPER_ADMIN" && req.headers["x-company-id"]) {
+      companyId = req.headers["x-company-id"];
+    }
+
+    const pool = await sql.connect(dbConfig);
+    const tokenResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(
+        `SELECT FBRToken FROM Companies WHERE CompanyID = @companyId AND IsActive = 1`
+      );
+
+    if (tokenResult.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Company not found",
+      });
+    }
+
+    const rawToken = tokenResult.recordset[0]?.FBRToken;
+    if (!rawToken || typeof rawToken !== "string" || rawToken.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "No FBR token configured for this company. Please configure it in FBR Integration.",
+      });
+    }
+
+    const token = rawToken.trim();
+    const authorizationHeader = /^bearer\s+/i.test(token)
+      ? token
+      : `Bearer ${token}`;
+
+    const fbrResponse = await axios.get("https://gw.fbr.gov.pk/pdi/v1/uom", {
+      headers: {
+        Authorization: authorizationHeader,
+        Accept: "application/json",
+      },
+    });
+
+    const payload = fbrResponse.data;
+    const list = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload?.uom)
+          ? payload.uom
+          : [];
+
+    const normalized = list
+      .map((row) => {
+        const code =
+          row?.code ??
+          row?.Code ??
+          row?.uom ??
+          row?.Uom ??
+          row?.UOM ??
+          row?.uomCode ??
+          row?.UomCode ??
+          row?.UOMCode ??
+          row?.uoM ??
+          row?.UoM ??
+          row?.uom_code ??
+          row?.UOM_CODE ??
+          row?.uomCd ??
+          row?.UOM_CD;
+
+        const description =
+          row?.description ??
+          row?.Description ??
+          row?.name ??
+          row?.Name ??
+          row?.uomDesc ??
+          row?.UomDesc ??
+          row?.UOMDesc ??
+          row?.uoMDesc ??
+          row?.UoMDesc ??
+          row?.uom_desc ??
+          row?.UOM_DESC;
+
+        if (!code) return null;
+
+        return {
+          code: String(code),
+          description: description ? String(description) : undefined,
+        };
+      })
+      .filter(Boolean);
+
+    res.json({
+      success: true,
+      data: normalized,
+    });
+  } catch (error) {
+    const status = error?.response?.status;
+    const data = error?.response?.data;
+    const message =
+      data?.fault?.message ||
+      data?.message ||
+      error?.message ||
+      "Failed to fetch UOM";
+
+    res.status(status || 500).json({
+      success: false,
+      message,
+      error: data || message,
+    });
+  }
+});
+
 // FBR Invoice submission endpoint
 app.post("/api/fbr/invoice", authenticateToken, async (req, res) => {
   try {
@@ -2929,7 +3043,7 @@ app.post("/api/items", authenticateToken, async (req, res) => {
         .input("unitPrice", sql.Decimal(18, 2), unitPrice)
         .input("purchaseTaxValue", sql.Decimal(5, 2), purchaseTaxValue || 0)
         .input("salesTaxValue", sql.Decimal(5, 2), salesTaxValue || 0)
-        .input("uom", sql.VarChar(20), uom)
+        .input("uom", sql.NVarChar(50), uom)
         .input("initialStock", sql.Decimal(18, 2), initialStock || 0)
         .input("companyId", sql.UniqueIdentifier, companyId)
         .input("createdBy", sql.UniqueIdentifier, req.user.userId).query(`
@@ -3012,7 +3126,7 @@ app.put("/api/items/:id", authenticateToken, async (req, res) => {
         .input("unitPrice", sql.Decimal(18, 2), unitPrice)
         .input("purchaseTaxValue", sql.Decimal(5, 2), purchaseTaxValue || 0)
         .input("salesTaxValue", sql.Decimal(5, 2), salesTaxValue || 0)
-        .input("uom", sql.VarChar(20), uom)
+        .input("uom", sql.NVarChar(50), uom)
         .input("initialStock", sql.Decimal(18, 2), initialStock || 0)
         .input("companyId", sql.UniqueIdentifier, companyId).query(`
           UPDATE Items 

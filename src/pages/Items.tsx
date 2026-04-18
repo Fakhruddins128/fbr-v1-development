@@ -23,6 +23,7 @@ import {
   Snackbar,
   CircularProgress,
   Tooltip,
+  MenuItem,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import {
@@ -38,7 +39,7 @@ import {
   Download as DownloadIcon,
 } from '@mui/icons-material';
 import { formatCurrency, formatDate } from '../utils/formatUtils';
-import { itemsApi, Item, CreateItemRequest } from '../api/itemsApi';
+import { itemsApi, Item, CreateItemRequest, UnitOfMeasurement } from '../api/itemsApi';
 
 interface ItemFormData {
   hsCode: string;
@@ -61,7 +62,7 @@ const Items: React.FC = () => {
     unitPrice: 0,
     purchaseTaxValue: 0,
     salesTaxValue: 0,
-    uom: 'Numbers, pieces, units',
+    uom: 'PCS',
     initialStock: 0,
   });
   const [snackbar, setSnackbar] = useState({
@@ -71,6 +72,9 @@ const Items: React.FC = () => {
   });
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [unitOfMeasurements, setUnitOfMeasurements] = useState<UnitOfMeasurement[]>([]);
+  const [isLoadingUnitOfMeasurements, setIsLoadingUnitOfMeasurements] = useState(false);
+  const [unitOfMeasurementsError, setUnitOfMeasurementsError] = useState<string | null>(null);
 
   const showSnackbar = useCallback((message: string, severity: 'success' | 'error') => {
     setSnackbar({ open: true, message, severity });
@@ -97,6 +101,27 @@ const Items: React.FC = () => {
     fetchItems();
   }, [fetchItems]);
 
+  const fetchUnitOfMeasurements = useCallback(async () => {
+    setIsLoadingUnitOfMeasurements(true);
+    setUnitOfMeasurementsError(null);
+    try {
+      const response = await itemsApi.getUnitOfMeasurements();
+      if (response.success) {
+        setUnitOfMeasurements(response.data || []);
+      } else {
+        setUnitOfMeasurementsError(response.message || 'Failed to fetch units of measurement');
+      }
+    } catch (error: any) {
+      setUnitOfMeasurementsError(error.message || 'Failed to fetch units of measurement');
+    } finally {
+      setIsLoadingUnitOfMeasurements(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUnitOfMeasurements();
+  }, [fetchUnitOfMeasurements]);
+
   const handleOpenDialog = (item?: Item) => {
     if (item) {
       setSelectedItem(item);
@@ -106,7 +131,7 @@ const Items: React.FC = () => {
         unitPrice: item.unitPrice,
         purchaseTaxValue: item.purchaseTaxValue,
         salesTaxValue: item.salesTaxValue,
-        uom: item.uom || 'Numbers, pieces, units',
+        uom: item.uom || 'PCS',
         initialStock: item.initialStock || 0,
       });
     } else {
@@ -117,7 +142,7 @@ const Items: React.FC = () => {
         unitPrice: 0,
         purchaseTaxValue: 0,
         salesTaxValue: 0,
-        uom: 'Numbers, pieces, units',
+        uom: 'PCS',
         initialStock: 0,
       });
     }
@@ -133,13 +158,13 @@ const Items: React.FC = () => {
       unitPrice: 0,
       purchaseTaxValue: 0,
       salesTaxValue: 0,
-      uom: 'Numbers, pieces, units',
+      uom: 'PCS',
       initialStock: 0,
     });
   };
 
   const handleSubmit = async () => {
-    if (!formData.hsCode || !formData.description || formData.unitPrice <= 0) {
+    if (!formData.hsCode || !formData.description || formData.unitPrice <= 0 || !formData.uom) {
       showSnackbar('Please fill in all required fields', 'error');
       return;
     }
@@ -152,7 +177,7 @@ const Items: React.FC = () => {
         unitPrice: formData.unitPrice,
         purchaseTaxValue: formData.purchaseTaxValue,
         salesTaxValue: formData.salesTaxValue,
-        uom: formData.uom || 'Numbers, pieces, units',
+        uom: formData.uom || 'PCS',
         initialStock: formData.initialStock,
       };
 
@@ -238,7 +263,7 @@ const Items: React.FC = () => {
           unitPrice: parseFloat(values[headers.indexOf('unitprice')]) || 0,
           purchaseTaxValue: parseFloat(values[headers.indexOf('purchasetaxvalue')]) || 0,
           salesTaxValue: parseFloat(values[headers.indexOf('salestaxvalue')]) || 0,
-          uom: values[headers.indexOf('uom')] || 'Numbers, pieces, units',
+          uom: values[headers.indexOf('uom')] || 'PCS',
           initialStock: headers.indexOf('initialstock') !== -1 ? parseFloat(values[headers.indexOf('initialstock')]) || 0 : 0,
         };
 
@@ -609,14 +634,29 @@ const Items: React.FC = () => {
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
+              {unitOfMeasurementsError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  Error loading Unit of Measurement: {unitOfMeasurementsError}
+                </Alert>
+              )}
               <TextField
                 fullWidth
+                select
                 label="Unit of Measurement"
                 value={formData.uom}
                 onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
                 required
-                placeholder="e.g., PCS, KG, LTR, MTR"
-              />
+                disabled={isLoadingUnitOfMeasurements}
+              >
+                <MenuItem value="">
+                  <em>Select Unit</em>
+                </MenuItem>
+                {unitOfMeasurements.map((uom) => (
+                  <MenuItem key={uom.code} value={uom.code}>
+                    {uom.description ? `${uom.description} (${uom.code})` : uom.code}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
           </Grid>
         </DialogContent>
