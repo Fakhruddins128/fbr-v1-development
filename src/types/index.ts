@@ -115,6 +115,8 @@ export interface Invoice {
   buyerRegistrationType: string;
   invoiceRefNo: string;
   poNumber?: string;
+  deliveryChallanNo?: string;
+  deliveryChallanDate?: string;
   fbrInvoiceNumber?: string;
   items: InvoiceItem[];
   totalAmount: number;

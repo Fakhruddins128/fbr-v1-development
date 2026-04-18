@@ -75,6 +75,8 @@ interface InvoiceFormData {
   transactionType: string;
   invoiceNo: string;
   poNumber: string;
+  deliveryChallanNo: string;
+  deliveryChallanDate: string;
   invoiceDate: string;
   saleOriginationProvince: string;
   destinationOfSupply: string;
@@ -1035,6 +1037,8 @@ const SalesInvoice: React.FC = () => {
     transactionType: 'Select',
     invoiceNo: '',
     poNumber: '',
+    deliveryChallanNo: '',
+    deliveryChallanDate: '',
     invoiceDate: new Date().toISOString().split('T')[0],
     saleOriginationProvince: 'Select',
     destinationOfSupply: 'Select',
@@ -1089,6 +1093,8 @@ const SalesInvoice: React.FC = () => {
               transactionType: mapInvoiceTypeToTransactionType(invoice.invoiceType || ''),
               invoiceNo: invoice.invoiceRefNo || '',
               poNumber: invoice.poNumber || '',
+              deliveryChallanNo: invoice.deliveryChallanNo || '',
+              deliveryChallanDate: invoice.deliveryChallanDate ? invoice.deliveryChallanDate.split('T')[0] : '',
               invoiceDate: invoice.invoiceDate ? invoice.invoiceDate.split('T')[0] : new Date().toISOString().split('T')[0],
               saleOriginationProvince: invoice.sellerProvince || 'Select',
               destinationOfSupply: invoice.buyerProvince || 'Select',
@@ -1407,6 +1413,8 @@ const SalesInvoice: React.FC = () => {
       transactionType: 'Select',
       invoiceNo: '',
       poNumber: '',
+      deliveryChallanNo: '',
+      deliveryChallanDate: '',
       invoiceDate: new Date().toISOString().split('T')[0],
       saleOriginationProvince: 'Select',
       destinationOfSupply: 'Select',
@@ -1858,6 +1866,8 @@ const SalesInvoice: React.FC = () => {
       buyerAddress: 'Buyer Address',
       invoiceRefNo: formData.invoiceNo,
       poNumber: formData.poNumber,
+      deliveryChallanNo: formData.deliveryChallanNo,
+      deliveryChallanDate: formData.deliveryChallanDate,
       buyerRegistrationType: formData.buyerType,
       scenarioId: determineFbrScenario(),
       items: formData.items.map(item => ({
@@ -1928,6 +1938,8 @@ const SalesInvoice: React.FC = () => {
         buyerRegistrationType: formData.buyerType,
         invoiceRefNo: formData.invoiceNo,
         poNumber: formData.poNumber,
+        deliveryChallanNo: formData.deliveryChallanNo,
+        deliveryChallanDate: formData.deliveryChallanDate,
         totalAmount,
         totalSalesTax,
         totalFurtherTax,
@@ -2171,6 +2183,28 @@ const SalesInvoice: React.FC = () => {
               value={formData.invoiceDate}
               onChange={(e) => handleInputChange('invoiceDate', e.target.value)}
               required
+              size="small"
+              InputLabelProps={{ shrink: true }}
+              disabled={isInvoiceSentToFBR()}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              fullWidth
+              label="Delivery Challan No."
+              value={formData.deliveryChallanNo}
+              onChange={(e) => handleInputChange('deliveryChallanNo', e.target.value)}
+              size="small"
+              disabled={isInvoiceSentToFBR()}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              fullWidth
+              label="Delivery Challan Date"
+              type="date"
+              value={formData.deliveryChallanDate}
+              onChange={(e) => handleInputChange('deliveryChallanDate', e.target.value)}
               size="small"
               InputLabelProps={{ shrink: true }}
               disabled={isInvoiceSentToFBR()}

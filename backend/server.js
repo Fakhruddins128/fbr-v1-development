@@ -224,6 +224,8 @@ app.get("/api/invoices", authenticateToken, async (req, res) => {
         buyerRegistrationType: invoice.BuyerRegistrationType,
         invoiceRefNo: invoice.InvoiceRefNo,
         poNumber: invoice.PONumber,
+        deliveryChallanNo: invoice.DeliveryChallanNo,
+        deliveryChallanDate: invoice.DeliveryChallanDate,
         totalAmount: invoice.TotalAmount,
         totalSalesTax: invoice.TotalSalesTax,
         totalFurtherTax: invoice.TotalFurtherTax,
@@ -350,6 +352,8 @@ app.get("/api/invoices/:id", authenticateToken, async (req, res) => {
       buyerRegistrationType: invoice.BuyerRegistrationType,
       invoiceRefNo: invoice.InvoiceRefNo,
       poNumber: invoice.PONumber,
+      deliveryChallanNo: invoice.DeliveryChallanNo,
+      deliveryChallanDate: invoice.DeliveryChallanDate,
       totalAmount: invoice.TotalAmount,
       totalSalesTax: invoice.TotalSalesTax,
       totalFurtherTax: invoice.TotalFurtherTax,
@@ -397,6 +401,8 @@ app.post("/api/invoices", authenticateToken, async (req, res) => {
       buyerRegistrationType,
       invoiceRefNo,
       poNumber,
+      deliveryChallanNo,
+      deliveryChallanDate,
       items,
     } = req.body;
 
@@ -448,7 +454,77 @@ app.post("/api/invoices", authenticateToken, async (req, res) => {
         .substr(2, 5)
         .toUpperCase()}`;
 
-      // Insert invoice
+      const columnInfoResult = await transaction.request().query(`
+        SELECT
+          COL_LENGTH('Invoices', 'DeliveryChallanNo') AS DeliveryChallanNo,
+          COL_LENGTH('Invoices', 'DeliveryChallanDate') AS DeliveryChallanDate
+      `);
+
+      const hasDeliveryChallanNo =
+        columnInfoResult.recordset?.[0]?.DeliveryChallanNo !== null &&
+        columnInfoResult.recordset?.[0]?.DeliveryChallanNo !== undefined;
+      const hasDeliveryChallanDate =
+        columnInfoResult.recordset?.[0]?.DeliveryChallanDate !== null &&
+        columnInfoResult.recordset?.[0]?.DeliveryChallanDate !== undefined;
+
+      const invoiceInsertColumns = [
+        "CompanyID",
+        "InvoiceNumber",
+        "InvoiceType",
+        "InvoiceDate",
+        "SellerNTNCNIC",
+        "SellerBusinessName",
+        "SellerProvince",
+        "SellerAddress",
+        "BuyerNTNCNIC",
+        "BuyerBusinessName",
+        "BuyerProvince",
+        "BuyerAddress",
+        "BuyerRegistrationType",
+        "InvoiceRefNo",
+        "PONumber",
+        ...(hasDeliveryChallanNo ? ["DeliveryChallanNo"] : []),
+        ...(hasDeliveryChallanDate ? ["DeliveryChallanDate"] : []),
+        "ScenarioID",
+        "TotalAmount",
+        "TotalSalesTax",
+        "TotalFurtherTax",
+        "TotalDiscount",
+        "CreatedBy",
+      ];
+
+      const invoiceInsertValues = [
+        "@companyId",
+        "@invoiceNumber",
+        "@invoiceType",
+        "@invoiceDate",
+        "@sellerNTNCNIC",
+        "@sellerBusinessName",
+        "@sellerProvince",
+        "@sellerAddress",
+        "@buyerNTNCNIC",
+        "@buyerBusinessName",
+        "@buyerProvince",
+        "@buyerAddress",
+        "@buyerRegistrationType",
+        "@invoiceRefNo",
+        "@poNumber",
+        ...(hasDeliveryChallanNo ? ["@deliveryChallanNo"] : []),
+        ...(hasDeliveryChallanDate ? ["@deliveryChallanDate"] : []),
+        "@scenarioID",
+        "@totalAmount",
+        "@totalSalesTax",
+        "@totalFurtherTax",
+        "@totalDiscount",
+        "@createdBy",
+      ];
+
+      const invoiceInsertQuery = `
+          INSERT INTO Invoices (${invoiceInsertColumns.join(", ")})
+          OUTPUT INSERTED.InvoiceID
+          VALUES (${invoiceInsertValues.join(", ")})
+        `;
+
       const invoiceResult = await transaction
         .request()
         .input("companyId", sql.UniqueIdentifier, companyId)
@@ -466,26 +542,19 @@ app.post("/api/invoices", authenticateToken, async (req, res) => {
         .input("buyerRegistrationType", sql.NVarChar, buyerRegistrationType)
         .input("invoiceRefNo", sql.NVarChar, invoiceRefNo || "")
         .input("poNumber", sql.NVarChar, poNumber || "")
+        .input("deliveryChallanNo", sql.NVarChar, deliveryChallanNo || "")
+        .input(
+          "deliveryChallanDate",
+          sql.DateTime,
+          deliveryChallanDate ? new Date(deliveryChallanDate) : null
+        )
         .input("scenarioID", sql.NVarChar, "SCENARIO_001")
         .input("totalAmount", sql.Decimal(18, 2), totalAmount)
         .input("totalSalesTax", sql.Decimal(18, 2), totalSalesTax)
         .input("totalFurtherTax", sql.Decimal(18, 2), totalFurtherTax)
         .input("totalDiscount", sql.Decimal(18, 2), totalDiscount)
-        .input("createdBy", sql.UniqueIdentifier, req.user.userId).query(`
-          INSERT INTO Invoices (
-            CompanyID, InvoiceNumber, InvoiceType, InvoiceDate, SellerNTNCNIC, SellerBusinessName,
-            SellerProvince, SellerAddress, BuyerNTNCNIC, BuyerBusinessName,
-            BuyerProvince, BuyerAddress, BuyerRegistrationType, InvoiceRefNo, PONumber,
-            ScenarioID, TotalAmount, TotalSalesTax, TotalFurtherTax, TotalDiscount, CreatedBy
-          )
-          OUTPUT INSERTED.InvoiceID
-          VALUES (
-            @companyId, @invoiceNumber, @invoiceType, @invoiceDate, @sellerNTNCNIC, @sellerBusinessName,
-            @sellerProvince, @sellerAddress, @buyerNTNCNIC, @buyerBusinessName,
-            @buyerProvince, @buyerAddress, @buyerRegistrationType, @invoiceRefNo, @poNumber,
-            @scenarioID, @totalAmount, @totalSalesTax, @totalFurtherTax, @totalDiscount, @createdBy
-          )
-        `);
+        .input("createdBy", sql.UniqueIdentifier, req.user.userId)
+        .query(invoiceInsertQuery);
 
       const invoiceId = invoiceResult.recordset[0].InvoiceID;
 
@@ -703,6 +772,8 @@ app.put("/api/invoices/:id", authenticateToken, async (req, res) => {
       buyerRegistrationType,
       invoiceRefNo,
       poNumber,
+      deliveryChallanNo,
+      deliveryChallanDate,
       items,
     } = req.body;
 
@@ -737,7 +808,48 @@ app.put("/api/invoices/:id", authenticateToken, async (req, res) => {
         0
       );
 
-      // Update invoice
+      const columnInfoResult = await transaction.request().query(`
+        SELECT
+          COL_LENGTH('Invoices', 'DeliveryChallanNo') AS DeliveryChallanNo,
+          COL_LENGTH('Invoices', 'DeliveryChallanDate') AS DeliveryChallanDate
+      `);
+
+      const hasDeliveryChallanNo =
+        columnInfoResult.recordset?.[0]?.DeliveryChallanNo !== null &&
+        columnInfoResult.recordset?.[0]?.DeliveryChallanNo !== undefined;
+      const hasDeliveryChallanDate =
+        columnInfoResult.recordset?.[0]?.DeliveryChallanDate !== null &&
+        columnInfoResult.recordset?.[0]?.DeliveryChallanDate !== undefined;
+
+      const updateAssignments = [
+        "InvoiceType = @invoiceType",
+        "InvoiceDate = @invoiceDate",
+        "SellerNTNCNIC = @sellerNTNCNIC",
+        "SellerBusinessName = @sellerBusinessName",
+        "SellerProvince = @sellerProvince",
+        "SellerAddress = @sellerAddress",
+        "BuyerNTNCNIC = @buyerNTNCNIC",
+        "BuyerBusinessName = @buyerBusinessName",
+        "BuyerProvince = @buyerProvince",
+        "BuyerAddress = @buyerAddress",
+        "BuyerRegistrationType = @buyerRegistrationType",
+        "InvoiceRefNo = @invoiceRefNo",
+        "PONumber = @poNumber",
+        ...(hasDeliveryChallanNo ? ["DeliveryChallanNo = @deliveryChallanNo"] : []),
+        ...(hasDeliveryChallanDate ? ["DeliveryChallanDate = @deliveryChallanDate"] : []),
+        "TotalAmount = @totalAmount",
+        "TotalSalesTax = @totalSalesTax",
+        "TotalFurtherTax = @totalFurtherTax",
+        "TotalDiscount = @totalDiscount",
+        "UpdatedAt = GETDATE()",
+      ];
+
+      const invoiceUpdateQuery = `
+          UPDATE Invoices SET
+            ${updateAssignments.join(",\n            ")}
+          WHERE InvoiceID = @invoiceId AND CompanyID = @companyId
+        `;
+
       const invoiceResult = await transaction
         .request()
         .input("invoiceId", sql.UniqueIdentifier, id)
@@ -755,31 +867,17 @@ app.put("/api/invoices/:id", authenticateToken, async (req, res) => {
         .input("buyerRegistrationType", sql.NVarChar, buyerRegistrationType)
         .input("invoiceRefNo", sql.NVarChar, invoiceRefNo || "")
         .input("poNumber", sql.NVarChar, poNumber || "")
+        .input("deliveryChallanNo", sql.NVarChar, deliveryChallanNo || "")
+        .input(
+          "deliveryChallanDate",
+          sql.DateTime,
+          deliveryChallanDate ? new Date(deliveryChallanDate) : null
+        )
         .input("totalAmount", sql.Decimal(18, 2), totalAmount)
         .input("totalSalesTax", sql.Decimal(18, 2), totalSalesTax)
         .input("totalFurtherTax", sql.Decimal(18, 2), totalFurtherTax)
-        .input("totalDiscount", sql.Decimal(18, 2), totalDiscount).query(`
-          UPDATE Invoices SET
-            InvoiceType = @invoiceType,
-            InvoiceDate = @invoiceDate,
-            SellerNTNCNIC = @sellerNTNCNIC,
-            SellerBusinessName = @sellerBusinessName,
-            SellerProvince = @sellerProvince,
-            SellerAddress = @sellerAddress,
-            BuyerNTNCNIC = @buyerNTNCNIC,
-            BuyerBusinessName = @buyerBusinessName,
-            BuyerProvince = @buyerProvince,
-            BuyerAddress = @buyerAddress,
-            BuyerRegistrationType = @buyerRegistrationType,
-            InvoiceRefNo = @invoiceRefNo,
-            PONumber = @poNumber,
-            TotalAmount = @totalAmount,
-            TotalSalesTax = @totalSalesTax,
-            TotalFurtherTax = @totalFurtherTax,
-            TotalDiscount = @totalDiscount,
-            UpdatedAt = GETDATE()
-          WHERE InvoiceID = @invoiceId AND CompanyID = @companyId
-        `);
+        .input("totalDiscount", sql.Decimal(18, 2), totalDiscount)
+        .query(invoiceUpdateQuery);
 
       if (invoiceResult.rowsAffected[0] === 0) {
         await transaction.rollback();
