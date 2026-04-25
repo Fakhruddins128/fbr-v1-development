@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 5001; // Changed to port 5001 to avoid conflict
 const allowedOrigins = [
   "https://fbr-v1-development.vercel.app",
   "http://localhost:3000",
+  "https://gw.fbr.gov.pk/pdi/v1/uom",
 ];
 
 app.use(
