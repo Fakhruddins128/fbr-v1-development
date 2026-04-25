@@ -70,8 +70,6 @@ class ItemsApi {
     }
     
     return headers;
-
-    
   }
 
   async getUnitOfMeasurements(): Promise<UnitOfMeasurementsResponse> {
