@@ -143,7 +143,7 @@ class ItemsApi {
         return { success: false, message: 'No FBR token configured for this company' };
       }
 
-      const authorizationHeader = /^bearer\s+/i.test(rawToken) ? rawToken : `${rawToken}`;
+      const authorizationHeader = /^bearer\s+/i.test(rawToken) ? rawToken : `Bearer ${rawToken}`;
       const response = await fetch('https://gw.fbr.gov.pk/pdi/v1/uom', {
         method: 'GET',
         headers: {
