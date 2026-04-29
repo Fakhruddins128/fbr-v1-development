@@ -98,6 +98,12 @@ class ItemsApi {
           row?.uom ??
           row?.Uom ??
           row?.UOM ??
+          row?.uomId ??
+          row?.uomID ??
+          row?.uom_id ??
+          row?.uoM_ID ??
+          row?.UoM_ID ??
+          row?.UOM_ID ??
           row?.uomCode ??
           row?.UomCode ??
           row?.UOMCode ??
@@ -119,6 +125,8 @@ class ItemsApi {
           row?.uoMDesc ??
           row?.UoMDesc ??
           row?.uom_desc ??
+          row?.uoM_DESC ??
+          row?.UoM_DESC ??
           row?.UOM_DESC;
 
         if (!code) return null;
