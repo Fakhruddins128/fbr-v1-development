@@ -92,7 +92,9 @@ class ItemsApi {
 
     return list
       .map((row: any) => {
-        const code =
+        if (!row || typeof row !== 'object') return null;
+
+        const codeCandidate =
           row?.code ??
           row?.Code ??
           row?.uom ??
@@ -114,7 +116,7 @@ class ItemsApi {
           row?.uomCd ??
           row?.UOM_CD;
 
-        const description =
+        const descriptionCandidate =
           row?.description ??
           row?.Description ??
           row?.name ??
@@ -129,7 +131,35 @@ class ItemsApi {
           row?.UoM_DESC ??
           row?.UOM_DESC;
 
-        if (!code) return null;
+        const keys = Object.keys(row);
+        const lowerKeyMap = keys.reduce((acc: Record<string, string>, k) => {
+          acc[k.toLowerCase()] = k;
+          return acc;
+        }, {});
+
+        const findByRegex = (regex: RegExp) => {
+          const matchLower = Object.keys(lowerKeyMap).find((k) => regex.test(k));
+          return matchLower ? (row as any)[lowerKeyMap[matchLower]] : undefined;
+        };
+
+        const fallbackCode =
+          findByRegex(/uom.*(id|code)$/i) ??
+          findByRegex(/(id|code).*uom/i) ??
+          findByRegex(/^uom$/i);
+
+        const fallbackDescription =
+          findByRegex(/(desc|description|name)$/i) ??
+          findByRegex(/uom.*(desc|description|name)/i);
+
+        let code: any = codeCandidate ?? fallbackCode;
+        let description: any = descriptionCandidate ?? fallbackDescription;
+
+        if ((code === undefined || code === null || String(code).trim() === '') && keys.length === 2) {
+          code = (row as any)[keys[0]];
+          description = (row as any)[keys[1]];
+        }
+
+        if (code === undefined || code === null || String(code).trim() === '') return null;
 
         return {
           code: String(code),
