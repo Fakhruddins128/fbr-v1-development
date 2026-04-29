@@ -53,6 +53,120 @@ export interface UnitOfMeasurementsResponse {
 }
 
 class ItemsApi {
+  private getCompanyIdForFbr(): string | null {
+    const selectedCompanyId = localStorage.getItem('selectedCompanyId');
+    if (selectedCompanyId) return selectedCompanyId;
+
+    const userData = localStorage.getItem('user');
+    if (!userData) return null;
+
+    try {
+      const user = JSON.parse(userData);
+      return typeof user?.companyId === 'string' ? user.companyId : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async fetchFbrTokenFromBackend(companyId: string): Promise<string | null> {
+    const response = await fetch(`${API_BASE_URL}/api/companies/${companyId}/fbr-token`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+
+    if (!response.ok) return null;
+
+    const result = await response.json();
+    const token = result?.data?.fbrToken;
+    return typeof token === 'string' && token.trim().length > 0 ? token.trim() : null;
+  }
+
+  private normalizeUomPayload(payload: any): UnitOfMeasurement[] {
+    const list = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload?.uom)
+          ? payload.uom
+          : [];
+
+    return list
+      .map((row: any) => {
+        const code =
+          row?.code ??
+          row?.Code ??
+          row?.uom ??
+          row?.Uom ??
+          row?.UOM ??
+          row?.uomCode ??
+          row?.UomCode ??
+          row?.UOMCode ??
+          row?.uoM ??
+          row?.UoM ??
+          row?.uom_code ??
+          row?.UOM_CODE ??
+          row?.uomCd ??
+          row?.UOM_CD;
+
+        const description =
+          row?.description ??
+          row?.Description ??
+          row?.name ??
+          row?.Name ??
+          row?.uomDesc ??
+          row?.UomDesc ??
+          row?.UOMDesc ??
+          row?.uoMDesc ??
+          row?.UoMDesc ??
+          row?.uom_desc ??
+          row?.UOM_DESC;
+
+        if (!code) return null;
+
+        return {
+          code: String(code),
+          description: description ? String(description) : undefined,
+        } as UnitOfMeasurement;
+      })
+      .filter(Boolean) as UnitOfMeasurement[];
+  }
+
+  private async getUnitOfMeasurementsDirectFromFbr(): Promise<UnitOfMeasurementsResponse> {
+    try {
+      const companyId = this.getCompanyIdForFbr();
+      if (!companyId) {
+        return { success: false, message: 'Company not selected' };
+      }
+
+      const rawToken = await this.fetchFbrTokenFromBackend(companyId);
+      if (!rawToken) {
+        return { success: false, message: 'No FBR token configured for this company' };
+      }
+
+      const authorizationHeader = /^bearer\s+/i.test(rawToken) ? rawToken : `Bearer ${rawToken}`;
+      const response = await fetch('https://gw.fbr.gov.pk/pdi/v1/uom', {
+        method: 'GET',
+        headers: {
+          Authorization: authorizationHeader,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const payload = await response.json();
+      return { success: true, data: this.normalizeUomPayload(payload) };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to fetch units of measurement',
+        error: error.message,
+      };
+    }
+  }
+
   private getAuthHeaders() {
     const token = localStorage.getItem('auth_token');
     const selectedCompanyId = localStorage.getItem('selectedCompanyId');
@@ -80,13 +194,16 @@ class ItemsApi {
       });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          return await this.getUnitOfMeasurementsDirectFromFbr();
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      return data;
+      if (data?.success === true) return data;
+      return { success: true, data: this.normalizeUomPayload(data) };
     } catch (error: any) {
-      console.error('Error fetching units of measurement:', error);
       return {
         success: false,
         message: error.message || 'Failed to fetch units of measurement',
