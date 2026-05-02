@@ -569,7 +569,7 @@ app.post("/api/invoices", authenticateToken, async (req, res) => {
           .input("hsCode", sql.NVarChar, item.hsCode)
           .input("productDescription", sql.NVarChar, item.productDescription)
           .input("rate", sql.NVarChar, item.rate)
-          .input("uoM", sql.NVarChar, item.uoM)
+          .input("uoM", sql.NVarChar(50), item.uoM)
           .input("quantity", sql.Decimal(18, 4), item.quantity)
           .input("totalValues", sql.Decimal(18, 2), item.totalValues || 0)
           .input(
@@ -670,10 +670,19 @@ app.post("/api/invoices", authenticateToken, async (req, res) => {
     }
   } catch (error) {
     console.error("Error creating invoice:", error);
+    const errorMessage = String(error?.message || "");
+    const errorNumber = error?.number;
+    const isTruncation =
+      errorNumber === 2628 ||
+      errorNumber === 8152 ||
+      /truncat/i.test(errorMessage);
+
     res.status(500).json({
       success: false,
-      message: "Failed to create invoice",
-      error: error.message,
+      message: isTruncation
+        ? 'Failed to create invoice. Database field size is too small (UoM may exceed NVARCHAR(20)). Run DB migration to increase UoM fields to NVARCHAR(50).'
+        : "Failed to create invoice",
+      error: error?.message,
     });
   }
 });
@@ -904,7 +913,7 @@ app.put("/api/invoices/:id", authenticateToken, async (req, res) => {
           .input("hsCode", sql.NVarChar, item.hsCode)
           .input("productDescription", sql.NVarChar, item.productDescription)
           .input("rate", sql.NVarChar, item.rate)
-          .input("uoM", sql.NVarChar, item.uoM)
+          .input("uoM", sql.NVarChar(50), item.uoM)
           .input("quantity", sql.Decimal(18, 4), item.quantity)
           .input("totalValues", sql.Decimal(18, 2), item.totalValues || 0)
           .input(
@@ -1005,10 +1014,19 @@ app.put("/api/invoices/:id", authenticateToken, async (req, res) => {
     }
   } catch (error) {
     console.error("Error updating invoice:", error);
+    const errorMessage = String(error?.message || "");
+    const errorNumber = error?.number;
+    const isTruncation =
+      errorNumber === 2628 ||
+      errorNumber === 8152 ||
+      /truncat/i.test(errorMessage);
+
     res.status(500).json({
       success: false,
-      message: "Failed to update invoice",
-      error: error.message,
+      message: isTruncation
+        ? 'Failed to update invoice. Database field size is too small (UoM may exceed NVARCHAR(20)). Run DB migration to increase UoM fields to NVARCHAR(50).'
+        : "Failed to update invoice",
+      error: error?.message,
     });
   }
 });
