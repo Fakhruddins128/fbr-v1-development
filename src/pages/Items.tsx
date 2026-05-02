@@ -652,8 +652,8 @@ const Items: React.FC = () => {
                   <em>Select Unit</em>
                 </MenuItem>
                 {unitOfMeasurements.map((uom) => (
-                  <MenuItem key={uom.code} value={uom.code}>
-                    {uom.description ? `${uom.description} (${uom.code})` : uom.code}
+                  <MenuItem key={uom.description} value={uom.description}>
+                    {uom.description ? `${uom.description}` : uom.code}
                   </MenuItem>
                 ))}
               </TextField>
