@@ -59,7 +59,7 @@ Company-specific master list of items for quick invoice creation.
 - `Description` (NVARCHAR(255))
 - `UnitPrice` (DECIMAL(18, 2))
 - `SalesTaxValue` (DECIMAL(18, 2))
-- `UoM` (NVARCHAR(20))
+- `UoM` (NVARCHAR(50))
 
 ## Relationships
 

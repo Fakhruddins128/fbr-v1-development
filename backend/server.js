@@ -3417,6 +3417,8 @@ app.post("/api/purchases", authenticateToken, async (req, res) => {
 
     const purchaseId = purchaseResult.recordset[0].PurchaseID;
 
+    const initialStockDeltas = new Map();
+
     // Insert purchase items
     for (const item of items) {
       await transaction
@@ -3425,7 +3427,7 @@ app.post("/api/purchases", authenticateToken, async (req, res) => {
         .input("itemId", sql.UniqueIdentifier, item.itemId)
         .input("itemName", sql.NVarChar, item.itemName)
         .input("purchasePrice", sql.Decimal(18, 2), item.purchasePrice)
-        .input("purchaseQty", sql.Int, item.purchaseQty)
+        .input("purchaseQty", sql.Decimal(18, 2), item.purchaseQty)
         .input("totalAmount", sql.Decimal(18, 2), item.totalAmount).query(`
           INSERT INTO PurchaseItems (
             PurchaseID, ItemID, ItemName, PurchasePrice, PurchaseQty, TotalAmount
@@ -3433,6 +3435,25 @@ app.post("/api/purchases", authenticateToken, async (req, res) => {
           VALUES (
             @purchaseId, @itemId, @itemName, @purchasePrice, @purchaseQty, @totalAmount
           )
+        `);
+
+      const itemIdKey = String(item.itemId || "");
+      const qty = Number(item.purchaseQty || 0);
+      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
+        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) + qty);
+      }
+    }
+
+    for (const [itemIdKey, delta] of initialStockDeltas.entries()) {
+      await transaction
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("itemId", sql.UniqueIdentifier, itemIdKey)
+        .input("delta", sql.Decimal(18, 2), delta)
+        .query(`
+          UPDATE Items
+          SET InitialStock = ISNULL(InitialStock, 0) + @delta
+          WHERE ItemID = @itemId AND CompanyID = @companyId AND IsActive = 1
         `);
     }
 
@@ -3480,6 +3501,15 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
   try {
     await transaction.begin();
 
+    const oldItemsResult = await transaction
+      .request()
+      .input("purchaseId", sql.UniqueIdentifier, id)
+      .query(`
+        SELECT ItemID, PurchaseQty
+        FROM PurchaseItems
+        WHERE PurchaseID = @purchaseId
+      `);
+
     // Update purchase
     const purchaseResult = await transaction
       .request()
@@ -3520,6 +3550,16 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
       .input("purchaseId", sql.UniqueIdentifier, id)
       .query("DELETE FROM PurchaseItems WHERE PurchaseID = @purchaseId");
 
+    const initialStockDeltas = new Map();
+
+    for (const row of oldItemsResult.recordset || []) {
+      const itemIdKey = String(row.ItemID || "");
+      const qty = Number(row.PurchaseQty || 0);
+      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
+        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) - qty);
+      }
+    }
+
     // Insert updated purchase items
     for (const item of items) {
       await transaction
@@ -3528,7 +3568,7 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
         .input("itemId", sql.UniqueIdentifier, item.itemId)
         .input("itemName", sql.NVarChar, item.itemName)
         .input("purchasePrice", sql.Decimal(18, 2), item.purchasePrice)
-        .input("purchaseQty", sql.Int, item.purchaseQty)
+        .input("purchaseQty", sql.Decimal(18, 2), item.purchaseQty)
         .input("totalAmount", sql.Decimal(18, 2), item.totalAmount).query(`
           INSERT INTO PurchaseItems (
             PurchaseID, ItemID, ItemName, PurchasePrice, PurchaseQty, TotalAmount
@@ -3536,6 +3576,27 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
           VALUES (
             @purchaseId, @itemId, @itemName, @purchasePrice, @purchaseQty, @totalAmount
           )
+        `);
+
+      const itemIdKey = String(item.itemId || "");
+      const qty = Number(item.purchaseQty || 0);
+      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
+        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) + qty);
+      }
+    }
+
+    for (const [itemIdKey, delta] of initialStockDeltas.entries()) {
+      if (!delta) continue;
+
+      await transaction
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("itemId", sql.UniqueIdentifier, itemIdKey)
+        .input("delta", sql.Decimal(18, 2), delta)
+        .query(`
+          UPDATE Items
+          SET InitialStock = ISNULL(InitialStock, 0) + @delta
+          WHERE ItemID = @itemId AND CompanyID = @companyId AND IsActive = 1
         `);
     }
 
