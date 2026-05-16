@@ -803,7 +803,6 @@ BEGIN
     created_at DATETIME2 NOT NULL CONSTRAINT DF_ScenarioMapping_created_at DEFAULT GETDATE(),
     updated_at DATETIME2 NOT NULL CONSTRAINT DF_ScenarioMapping_updated_at DEFAULT GETDATE(),
     BusinessActivity NVARCHAR(100) NULL,
-    Sector NVARCHAR(100) NULL,
     ApplicableScenarios NVARCHAR(MAX) NULL,
     IsActive BIT NULL,
     CreatedAt DATETIME2 NULL,
@@ -817,136 +816,98 @@ BEGIN
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'business_activity') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'business_activity') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD business_activity NVARCHAR(100) NULL;
   PRINT 'ScenarioMapping.business_activity added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'sector') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'sector') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD sector NVARCHAR(100) NULL;
   PRINT 'ScenarioMapping.sector added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'applicable_scenarios') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'applicable_scenarios') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD applicable_scenarios NVARCHAR(MAX) NULL;
   PRINT 'ScenarioMapping.applicable_scenarios added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'is_active') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'is_active') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD is_active BIT NULL;
   PRINT 'ScenarioMapping.is_active added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'created_at') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'created_at') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD created_at DATETIME2 NULL;
   PRINT 'ScenarioMapping.created_at added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'updated_at') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'updated_at') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD updated_at DATETIME2 NULL;
   PRINT 'ScenarioMapping.updated_at added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'BusinessActivity') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'BusinessActivity') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD BusinessActivity NVARCHAR(100) NULL;
   PRINT 'ScenarioMapping.BusinessActivity added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'Sector') IS NULL
-BEGIN
-  ALTER TABLE dbo.ScenarioMapping ADD Sector NVARCHAR(100) NULL;
-  PRINT 'ScenarioMapping.Sector added.';
-END
-GO
-
-IF COL_LENGTH('dbo.ScenarioMapping', 'ApplicableScenarios') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'ApplicableScenarios') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD ApplicableScenarios NVARCHAR(MAX) NULL;
   PRINT 'ScenarioMapping.ApplicableScenarios added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'IsActive') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'IsActive') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD IsActive BIT NULL;
   PRINT 'ScenarioMapping.IsActive added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'CreatedAt') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'CreatedAt') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD CreatedAt DATETIME2 NULL;
   PRINT 'ScenarioMapping.CreatedAt added.';
 END
 GO
 
-IF COL_LENGTH('dbo.ScenarioMapping', 'UpdatedAt') IS NULL
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL AND COL_LENGTH('dbo.ScenarioMapping', 'UpdatedAt') IS NULL
 BEGIN
   ALTER TABLE dbo.ScenarioMapping ADD UpdatedAt DATETIME2 NULL;
   PRINT 'ScenarioMapping.UpdatedAt added.';
 END
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ScenarioMapping_BusinessActivity_Sector' AND object_id = OBJECT_ID(N'dbo.ScenarioMapping'))
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ScenarioMapping_BusinessActivity_Sector' AND object_id = OBJECT_ID(N'dbo.ScenarioMapping'))
 BEGIN
   CREATE INDEX IX_ScenarioMapping_BusinessActivity_Sector ON dbo.ScenarioMapping (business_activity, sector);
   PRINT 'Index IX_ScenarioMapping_BusinessActivity_Sector created.';
 END
 GO
 
-UPDATE sm
-SET
-  BusinessActivity = COALESCE(sm.BusinessActivity, sm.business_activity),
-  Sector = COALESCE(sm.Sector, sm.sector),
-  ApplicableScenarios = COALESCE(
-    sm.ApplicableScenarios,
-    CASE
-      WHEN sm.applicable_scenarios IS NULL THEN NULL
-      WHEN ISJSON(sm.applicable_scenarios) = 1 THEN
-        STUFF((
-          SELECT N',' + j.[value]
-          FROM OPENJSON(sm.applicable_scenarios) j
-          FOR XML PATH(''), TYPE
-        ).value('.', 'NVARCHAR(MAX)'), 1, 1, N'')
-      ELSE sm.applicable_scenarios
-    END
-  ),
-  IsActive = COALESCE(sm.IsActive, sm.is_active),
-  CreatedAt = COALESCE(sm.CreatedAt, sm.created_at),
-  UpdatedAt = COALESCE(sm.UpdatedAt, sm.updated_at)
-FROM dbo.ScenarioMapping sm;
-GO
-
-IF OBJECT_ID(N'dbo.TR_ScenarioMapping_Sync', N'TR') IS NOT NULL
-  DROP TRIGGER dbo.TR_ScenarioMapping_Sync;
-GO
-
-CREATE TRIGGER dbo.TR_ScenarioMapping_Sync
-ON dbo.ScenarioMapping
-AFTER INSERT, UPDATE
-AS
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL
 BEGIN
-  SET NOCOUNT ON;
-
   UPDATE sm
   SET
-    BusinessActivity = sm.business_activity,
-    Sector = sm.sector,
-    ApplicableScenarios =
+    BusinessActivity = COALESCE(sm.BusinessActivity, sm.business_activity),
+    ApplicableScenarios = COALESCE(
+      sm.ApplicableScenarios,
       CASE
         WHEN sm.applicable_scenarios IS NULL THEN NULL
         WHEN ISJSON(sm.applicable_scenarios) = 1 THEN
@@ -956,12 +917,50 @@ BEGIN
             FOR XML PATH(''), TYPE
           ).value('.', 'NVARCHAR(MAX)'), 1, 1, N'')
         ELSE sm.applicable_scenarios
-      END,
-    IsActive = sm.is_active,
-    CreatedAt = sm.created_at,
-    UpdatedAt = sm.updated_at
-  FROM dbo.ScenarioMapping sm
-  INNER JOIN inserted i ON sm.id = i.id;
+      END
+    ),
+    IsActive = COALESCE(sm.IsActive, sm.is_active),
+    CreatedAt = COALESCE(sm.CreatedAt, sm.created_at),
+    UpdatedAt = COALESCE(sm.UpdatedAt, sm.updated_at)
+  FROM dbo.ScenarioMapping sm;
+END
+GO
+
+IF OBJECT_ID(N'dbo.ScenarioMapping', N'U') IS NOT NULL
+BEGIN
+  IF OBJECT_ID(N'dbo.TR_ScenarioMapping_Sync', N'TR') IS NOT NULL
+    DROP TRIGGER dbo.TR_ScenarioMapping_Sync;
+
+  DECLARE @CreateScenarioMappingTrigger NVARCHAR(MAX) = N'
+    CREATE TRIGGER dbo.TR_ScenarioMapping_Sync
+    ON dbo.ScenarioMapping
+    AFTER INSERT, UPDATE
+    AS
+    BEGIN
+      SET NOCOUNT ON;
+
+      UPDATE sm
+      SET
+        BusinessActivity = sm.business_activity,
+        ApplicableScenarios =
+          CASE
+            WHEN sm.applicable_scenarios IS NULL THEN NULL
+            WHEN ISJSON(sm.applicable_scenarios) = 1 THEN
+              STUFF((
+                SELECT N'','' + j.[value]
+                FROM OPENJSON(sm.applicable_scenarios) j
+                FOR XML PATH(''''), TYPE
+              ).value(''.'', ''NVARCHAR(MAX)''), 1, 1, N'''')
+            ELSE sm.applicable_scenarios
+          END,
+        IsActive = sm.is_active,
+        CreatedAt = sm.created_at,
+        UpdatedAt = sm.updated_at
+      FROM dbo.ScenarioMapping sm
+      INNER JOIN inserted i ON sm.id = i.id;
+    END';
+
+  EXEC sp_executesql @CreateScenarioMappingTrigger;
 END
 GO
 
