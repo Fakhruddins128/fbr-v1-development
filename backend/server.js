@@ -4036,6 +4036,63 @@ function isValidGuid(guid) {
   return guidRegex.test(guid);
 }
 
+async function ensureVendorsSchema(pool) {
+  await pool.request().query(`
+    IF OBJECT_ID('Vendors', 'U') IS NULL
+    BEGIN
+      CREATE TABLE Vendors (
+        VendorID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+        CompanyID UNIQUEIDENTIFIER NOT NULL,
+        VendorName NVARCHAR(255) NOT NULL,
+        VendorNTN NVARCHAR(50) NULL,
+        VendorCNIC NVARCHAR(15) NULL,
+        ContactPersonName NVARCHAR(255) NULL,
+        VendorAddress NVARCHAR(500) NULL,
+        VendorPhone NVARCHAR(20) NULL,
+        VendorEmail NVARCHAR(255) NULL,
+        BusinessActivity NVARCHAR(MAX) NULL,
+        Sector NVARCHAR(MAX) NULL,
+        CreatedBy UNIQUEIDENTIFIER NULL,
+        IsActive BIT NOT NULL DEFAULT 1,
+        CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+        UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
+      );
+    END
+
+    IF COL_LENGTH('Vendors', 'VendorNTN') IS NULL
+      ALTER TABLE Vendors ADD VendorNTN NVARCHAR(50) NULL;
+    IF COL_LENGTH('Vendors', 'VendorCNIC') IS NULL
+      ALTER TABLE Vendors ADD VendorCNIC NVARCHAR(15) NULL;
+    IF COL_LENGTH('Vendors', 'ContactPersonName') IS NULL
+      ALTER TABLE Vendors ADD ContactPersonName NVARCHAR(255) NULL;
+    IF COL_LENGTH('Vendors', 'VendorAddress') IS NULL
+      ALTER TABLE Vendors ADD VendorAddress NVARCHAR(500) NULL;
+    IF COL_LENGTH('Vendors', 'VendorPhone') IS NULL
+      ALTER TABLE Vendors ADD VendorPhone NVARCHAR(20) NULL;
+    IF COL_LENGTH('Vendors', 'VendorEmail') IS NULL
+      ALTER TABLE Vendors ADD VendorEmail NVARCHAR(255) NULL;
+    IF COL_LENGTH('Vendors', 'BusinessActivity') IS NULL
+      ALTER TABLE Vendors ADD BusinessActivity NVARCHAR(MAX) NULL;
+    IF COL_LENGTH('Vendors', 'Sector') IS NULL
+      ALTER TABLE Vendors ADD Sector NVARCHAR(MAX) NULL;
+    IF COL_LENGTH('Vendors', 'CreatedBy') IS NULL
+      ALTER TABLE Vendors ADD CreatedBy UNIQUEIDENTIFIER NULL;
+    IF COL_LENGTH('Vendors', 'IsActive') IS NULL
+      ALTER TABLE Vendors ADD IsActive BIT NOT NULL DEFAULT 1;
+    IF COL_LENGTH('Vendors', 'CreatedAt') IS NULL
+      ALTER TABLE Vendors ADD CreatedAt DATETIME NOT NULL DEFAULT GETDATE();
+    IF COL_LENGTH('Vendors', 'UpdatedAt') IS NULL
+      ALTER TABLE Vendors ADD UpdatedAt DATETIME NOT NULL DEFAULT GETDATE();
+
+    IF COL_LENGTH('Vendors', 'Address') IS NOT NULL AND COL_LENGTH('Vendors', 'VendorAddress') IS NOT NULL
+      UPDATE Vendors SET VendorAddress = COALESCE(VendorAddress, Address) WHERE VendorAddress IS NULL AND Address IS NOT NULL;
+    IF COL_LENGTH('Vendors', 'Phone') IS NOT NULL AND COL_LENGTH('Vendors', 'VendorPhone') IS NOT NULL
+      UPDATE Vendors SET VendorPhone = COALESCE(VendorPhone, Phone) WHERE VendorPhone IS NULL AND Phone IS NOT NULL;
+    IF COL_LENGTH('Vendors', 'Email') IS NOT NULL AND COL_LENGTH('Vendors', 'VendorEmail') IS NOT NULL
+      UPDATE Vendors SET VendorEmail = COALESCE(VendorEmail, Email) WHERE VendorEmail IS NULL AND Email IS NOT NULL;
+  `);
+}
+
 // Get all vendors
 app.get("/api/vendors", authenticateToken, async (req, res) => {
   try {
@@ -4048,11 +4105,18 @@ app.get("/api/vendors", authenticateToken, async (req, res) => {
       companyId: req.user.companyId,
     });
 
-    // For super admin, use company ID from header if provided, otherwise use user's company
+    // For super admin, require company ID from header if user token doesn't include it
     let companyId = req.user.companyId;
-    if (req.user.role === "SUPER_ADMIN" && req.headers["x-company-id"]) {
-      companyId = req.headers["x-company-id"];
-      console.log("Super admin requesting vendors for company ID:", companyId);
+    if (req.user.role === "SUPER_ADMIN") {
+      if (req.headers["x-company-id"]) {
+        companyId = req.headers["x-company-id"];
+        console.log("Super admin requesting vendors for company ID:", companyId);
+      } else if (!companyId) {
+        return res.status(400).json({
+          success: false,
+          message: "Company ID is required. Please select a company.",
+        });
+      }
     }
     console.log(
       "Final companyId to use:",
@@ -4073,6 +4137,7 @@ app.get("/api/vendors", authenticateToken, async (req, res) => {
     console.log("=== END VENDORS DEBUG ===");
 
     const pool = await sql.connect(dbConfig);
+    await ensureVendorsSchema(pool);
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId).query(`
@@ -4138,10 +4203,17 @@ app.post("/api/vendors", authenticateToken, async (req, res) => {
       });
     }
 
-    // For super admin, use company ID from header if provided, otherwise use user's company
+    // For super admin, require company ID from header if user token doesn't include it
     let companyId = req.user.companyId;
-    if (req.user.role === "SUPER_ADMIN" && req.headers["x-company-id"]) {
-      companyId = req.headers["x-company-id"];
+    if (req.user.role === "SUPER_ADMIN") {
+      if (req.headers["x-company-id"]) {
+        companyId = req.headers["x-company-id"];
+      } else if (!companyId) {
+        return res.status(400).json({
+          success: false,
+          message: "Company ID is required. Please select a company.",
+        });
+      }
     }
 
     // Validate GUID format for companyId
@@ -4153,6 +4225,7 @@ app.post("/api/vendors", authenticateToken, async (req, res) => {
     }
 
     const pool = await sql.connect(dbConfig);
+    await ensureVendorsSchema(pool);
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
@@ -4190,10 +4263,11 @@ app.post("/api/vendors", authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating vendor:", error);
+    const message = error?.message || "Failed to create vendor";
     res.status(500).json({
       success: false,
-      message: "Failed to create vendor",
-      error: error.message,
+      message,
+      error: message,
     });
   }
 });

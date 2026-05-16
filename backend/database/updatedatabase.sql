@@ -250,13 +250,18 @@ BEGIN
     VendorID UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_Vendors PRIMARY KEY DEFAULT NEWID(),
     CompanyID UNIQUEIDENTIFIER NOT NULL,
     VendorName NVARCHAR(255) NOT NULL,
+    VendorNTN NVARCHAR(50) NULL,
     ContactPersonName NVARCHAR(255) NULL,
     VendorCNIC NVARCHAR(15) NULL,
     Address NVARCHAR(500) NULL,
     Phone NVARCHAR(20) NULL,
     Email NVARCHAR(100) NULL,
+    VendorAddress NVARCHAR(500) NULL,
+    VendorPhone NVARCHAR(20) NULL,
+    VendorEmail NVARCHAR(255) NULL,
     BusinessActivity NVARCHAR(MAX) NULL,
     Sector NVARCHAR(MAX) NULL,
+    CreatedBy UNIQUEIDENTIFIER NULL,
     IsActive BIT NOT NULL CONSTRAINT DF_Vendors_IsActive DEFAULT 1,
     CreatedAt DATETIME NOT NULL CONSTRAINT DF_Vendors_CreatedAt DEFAULT GETDATE(),
     UpdatedAt DATETIME NOT NULL CONSTRAINT DF_Vendors_UpdatedAt DEFAULT GETDATE()
@@ -266,6 +271,13 @@ END
 ELSE
 BEGIN
   PRINT 'Table Vendors already exists.';
+END
+GO
+
+IF COL_LENGTH('dbo.Vendors', 'VendorNTN') IS NULL
+BEGIN
+  ALTER TABLE dbo.Vendors ADD VendorNTN NVARCHAR(50) NULL;
+  PRINT 'Vendors.VendorNTN added.';
 END
 GO
 
@@ -280,6 +292,58 @@ IF COL_LENGTH('dbo.Vendors', 'VendorCNIC') IS NULL
 BEGIN
   ALTER TABLE dbo.Vendors ADD VendorCNIC NVARCHAR(15) NULL;
   PRINT 'Vendors.VendorCNIC added.';
+END
+GO
+
+IF COL_LENGTH('dbo.Vendors', 'VendorAddress') IS NULL
+BEGIN
+  ALTER TABLE dbo.Vendors ADD VendorAddress NVARCHAR(500) NULL;
+  PRINT 'Vendors.VendorAddress added.';
+END
+GO
+
+IF COL_LENGTH('dbo.Vendors', 'VendorPhone') IS NULL
+BEGIN
+  ALTER TABLE dbo.Vendors ADD VendorPhone NVARCHAR(20) NULL;
+  PRINT 'Vendors.VendorPhone added.';
+END
+GO
+
+IF COL_LENGTH('dbo.Vendors', 'VendorEmail') IS NULL
+BEGIN
+  ALTER TABLE dbo.Vendors ADD VendorEmail NVARCHAR(255) NULL;
+  PRINT 'Vendors.VendorEmail added.';
+END
+GO
+
+IF COL_LENGTH('dbo.Vendors', 'CreatedBy') IS NULL
+BEGIN
+  ALTER TABLE dbo.Vendors ADD CreatedBy UNIQUEIDENTIFIER NULL;
+  PRINT 'Vendors.CreatedBy added.';
+END
+GO
+
+IF COL_LENGTH('dbo.Vendors', 'Address') IS NOT NULL AND COL_LENGTH('dbo.Vendors', 'VendorAddress') IS NOT NULL
+BEGIN
+  UPDATE dbo.Vendors
+  SET VendorAddress = COALESCE(VendorAddress, Address)
+  WHERE VendorAddress IS NULL AND Address IS NOT NULL;
+END
+GO
+
+IF COL_LENGTH('dbo.Vendors', 'Phone') IS NOT NULL AND COL_LENGTH('dbo.Vendors', 'VendorPhone') IS NOT NULL
+BEGIN
+  UPDATE dbo.Vendors
+  SET VendorPhone = COALESCE(VendorPhone, Phone)
+  WHERE VendorPhone IS NULL AND Phone IS NOT NULL;
+END
+GO
+
+IF COL_LENGTH('dbo.Vendors', 'Email') IS NOT NULL AND COL_LENGTH('dbo.Vendors', 'VendorEmail') IS NOT NULL
+BEGIN
+  UPDATE dbo.Vendors
+  SET VendorEmail = COALESCE(VendorEmail, Email)
+  WHERE VendorEmail IS NULL AND Email IS NOT NULL;
 END
 GO
 
