@@ -251,12 +251,20 @@ const Purchases: React.FC = () => {
   };
 
   const handleEditPurchase = (purchase: Purchase) => {
+    const normalizeDateValue = (value?: string) => {
+      if (!value) return new Date().toISOString().split('T')[0];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
+      return new Date().toISOString().split('T')[0];
+    };
+
     setSelectedPurchase(purchase);
     setFormData({
       poNumber: purchase.poNumber || '',
-      poDate: purchase.poDate || new Date().toISOString().split('T')[0],
+      poDate: normalizeDateValue(purchase.poDate),
       crNumber: purchase.crNumber || '',
-      date: purchase.date || new Date().toISOString().split('T')[0],
+      date: normalizeDateValue(purchase.date),
       vendorId: purchase.vendorId || '',
       vendorName: purchase.vendorName || '',
       items: purchase.items && purchase.items.length > 0 
