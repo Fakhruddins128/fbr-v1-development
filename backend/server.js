@@ -2959,6 +2959,7 @@ app.get("/api/items", authenticateToken, async (req, res) => {
       role: req.user.role,
       companyId: req.user.companyId,
     });
+    // test remarks for github uploading
 
     // For super admin, use company ID from header if provided, otherwise use user's company
     let companyId = req.user.companyId;
