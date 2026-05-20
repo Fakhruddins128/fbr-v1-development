@@ -2999,7 +2999,7 @@ app.get("/api/items", authenticateToken, async (req, res) => {
               SELECT ISNULL(SUM(pi.PurchaseQty), 0)
               FROM PurchaseItems pi
               JOIN Purchases p ON pi.PurchaseID = p.PurchaseID
-              WHERE pi.ItemID = CAST(Items.ItemID AS NVARCHAR(50)) AND p.CompanyID = @companyId AND p.Status = 'completed'
+              WHERE pi.ItemID = CAST(Items.ItemID AS NVARCHAR(50)) AND p.CompanyID = @companyId AND p.IsActive = 1 AND p.Status IN ('received', 'completed')
             ) as totalPurchased,
             (
               SELECT ISNULL(SUM(ii.Quantity), 0)
@@ -3418,8 +3418,6 @@ app.post("/api/purchases", authenticateToken, async (req, res) => {
 
     const purchaseId = purchaseResult.recordset[0].PurchaseID;
 
-    const initialStockDeltas = new Map();
-
     // Insert purchase items
     for (const item of items) {
       await transaction
@@ -3437,28 +3435,6 @@ app.post("/api/purchases", authenticateToken, async (req, res) => {
             @purchaseId, @itemId, @itemName, @purchasePrice, @purchaseQty, @totalAmount
           )
         `);
-
-      const itemIdKey = String(item.itemId || "");
-      const qty = Number(item.purchaseQty || 0);
-      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
-        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) + qty);
-      }
-    }
-
-    for (const [itemIdKey, delta] of initialStockDeltas.entries()) {
-      const updateResult = await transaction
-        .request()
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .input("itemId", sql.UniqueIdentifier, itemIdKey)
-        .input("delta", sql.Decimal(18, 2), delta)
-        .query(`
-          UPDATE Items
-          SET InitialStock = ISNULL(InitialStock, 0) + @delta
-          WHERE ItemID = @itemId AND CompanyID = @companyId AND IsActive = 1
-        `);
-      if (updateResult.rowsAffected?.[0] === 0) {
-        throw new Error("Failed to update item stock. Item not found for this company.");
-      }
     }
 
     await transaction.commit();
@@ -3506,15 +3482,6 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
   try {
     await transaction.begin();
 
-    const oldItemsResult = await transaction
-      .request()
-      .input("purchaseId", sql.UniqueIdentifier, id)
-      .query(`
-        SELECT ItemID, PurchaseQty
-        FROM PurchaseItems
-        WHERE PurchaseID = @purchaseId
-      `);
-
     // Update purchase
     const purchaseResult = await transaction
       .request()
@@ -3555,16 +3522,6 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
       .input("purchaseId", sql.UniqueIdentifier, id)
       .query("DELETE FROM PurchaseItems WHERE PurchaseID = @purchaseId");
 
-    const initialStockDeltas = new Map();
-
-    for (const row of oldItemsResult.recordset || []) {
-      const itemIdKey = String(row.ItemID || "");
-      const qty = Number(row.PurchaseQty || 0);
-      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
-        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) - qty);
-      }
-    }
-
     // Insert updated purchase items
     for (const item of items) {
       await transaction
@@ -3582,30 +3539,6 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
             @purchaseId, @itemId, @itemName, @purchasePrice, @purchaseQty, @totalAmount
           )
         `);
-
-      const itemIdKey = String(item.itemId || "");
-      const qty = Number(item.purchaseQty || 0);
-      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
-        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) + qty);
-      }
-    }
-
-    for (const [itemIdKey, delta] of initialStockDeltas.entries()) {
-      if (!delta) continue;
-
-      const updateResult = await transaction
-        .request()
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .input("itemId", sql.UniqueIdentifier, itemIdKey)
-        .input("delta", sql.Decimal(18, 2), delta)
-        .query(`
-          UPDATE Items
-          SET InitialStock = ISNULL(InitialStock, 0) + @delta
-          WHERE ItemID = @itemId AND CompanyID = @companyId AND IsActive = 1
-        `);
-      if (updateResult.rowsAffected?.[0] === 0) {
-        throw new Error("Failed to update item stock. Item not found for this company.");
-      }
     }
 
     await transaction.commit();
@@ -3637,64 +3570,7 @@ app.delete("/api/purchases/:id", authenticateToken, async (req, res) => {
 
   try {
     const pool = await sql.connect(dbConfig);
-    const transaction = new sql.Transaction(pool);
-    await transaction.begin();
-
-    const purchaseExistsResult = await transaction
-      .request()
-      .input("purchaseId", sql.UniqueIdentifier, id)
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .query(`
-        SELECT PurchaseID
-        FROM Purchases
-        WHERE PurchaseID = @purchaseId AND CompanyID = @companyId AND IsActive = 1
-      `);
-
-    if (!purchaseExistsResult.recordset?.length) {
-      await transaction.rollback();
-      return res.status(404).json({
-        success: false,
-        message: "Purchase not found",
-      });
-    }
-
-    const purchaseItemsResult = await transaction
-      .request()
-      .input("purchaseId", sql.UniqueIdentifier, id)
-      .query(`
-        SELECT ItemID, PurchaseQty
-        FROM PurchaseItems
-        WHERE PurchaseID = @purchaseId
-      `);
-
-    const initialStockDeltas = new Map();
-    for (const row of purchaseItemsResult.recordset || []) {
-      const itemIdKey = String(row.ItemID || "");
-      const qty = Number(row.PurchaseQty || 0);
-      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
-        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) - qty);
-      }
-    }
-
-    for (const [itemIdKey, delta] of initialStockDeltas.entries()) {
-      if (!delta) continue;
-
-      const updateResult = await transaction
-        .request()
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .input("itemId", sql.UniqueIdentifier, itemIdKey)
-        .input("delta", sql.Decimal(18, 2), delta)
-        .query(`
-          UPDATE Items
-          SET InitialStock = ISNULL(InitialStock, 0) + @delta
-          WHERE ItemID = @itemId AND CompanyID = @companyId AND IsActive = 1
-        `);
-      if (updateResult.rowsAffected?.[0] === 0) {
-        throw new Error("Failed to update item stock. Item not found for this company.");
-      }
-    }
-
-    await transaction
+    const result = await pool
       .request()
       .input("purchaseId", sql.UniqueIdentifier, id)
       .input("companyId", sql.UniqueIdentifier, companyId)
@@ -3703,8 +3579,12 @@ app.delete("/api/purchases/:id", authenticateToken, async (req, res) => {
         SET IsActive = 0, UpdatedAt = GETDATE()
         WHERE PurchaseID = @purchaseId AND CompanyID = @companyId AND IsActive = 1
       `);
-
-    await transaction.commit();
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Purchase not found",
+      });
+    }
 
     res.json({
       success: true,
