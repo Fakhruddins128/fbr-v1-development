@@ -3046,7 +3046,7 @@ SELECT
 
       const itemsWithCurrentStock = result.recordset.map(item => ({
         ...item,
-        currentStock: (item.initialStock || 0) + (item.totalPurchased || 0) - (item.totalSold || 0)
+        currentStock: (item.initialStock || 0) + (item.totalPurchased || 0) + (item.totalSold || 0)
       }));
 
       res.json({
