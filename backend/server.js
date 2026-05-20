@@ -2984,7 +2984,36 @@ app.get("/api/items", authenticateToken, async (req, res) => {
       const result = await pool
         .request()
         .input("companyId", sql.UniqueIdentifier, companyId).query(`
-          SELECT 
+          // SELECT 
+          //   ItemID as itemId,
+          //   HSCode as hsCode,
+          //   Description as description,
+          //   UnitPrice as unitPrice,
+          //   PurchaseTaxValue as purchaseTaxValue,
+          //   SalesTaxValue as salesTaxValue,
+          //   UoM as uom,
+          //   InitialStock as initialStock,
+          //   IsActive as isActive,
+          //   ItemCreateDate as itemCreateDate,
+          //   CompanyID as companyId,
+          //   (
+          //     SELECT ISNULL(SUM(pi.PurchaseQty), 0)
+          //     FROM PurchaseItems pi
+          //     JOIN Purchases p ON pi.PurchaseID = p.PurchaseID
+          //     WHERE pi.ItemID = CAST(Items.ItemID AS NVARCHAR(50)) AND p.CompanyID = @companyId AND p.IsActive = 1 AND p.Status IN ('received', 'completed')
+          //   ) as totalPurchased,
+          //   (
+          //     SELECT ISNULL(SUM(ii.Quantity), 0)
+          //     FROM InvoiceItems ii
+          //     JOIN Invoices i ON ii.InvoiceID = i.InvoiceID
+          //     WHERE ii.HSCode = Items.HSCode AND ii.ProductDescription = CAST(Items.Description AS NVARCHAR(255)) AND i.CompanyID = @companyId
+          //   ) as totalSold
+          // FROM Items 
+          // WHERE CompanyID = @companyId
+          // ORDER BY ItemCreateDate DESC
+
+
+SELECT 
             ItemID as itemId,
             HSCode as hsCode,
             Description as description,
@@ -3006,11 +3035,13 @@ app.get("/api/items", authenticateToken, async (req, res) => {
               SELECT ISNULL(SUM(ii.Quantity), 0)
               FROM InvoiceItems ii
               JOIN Invoices i ON ii.InvoiceID = i.InvoiceID
-              WHERE ii.HSCode = Items.HSCode AND ii.ProductDescription = CAST(Items.Description AS NVARCHAR(255)) AND i.CompanyID = @companyId
+              WHERE ii.MasterItemID = CAST(Items.ItemID AS NVARCHAR(50)) AND i.CompanyID = @companyId 
             ) as totalSold
           FROM Items 
           WHERE CompanyID = @companyId
           ORDER BY ItemCreateDate DESC
+
+
         `);
 
       const itemsWithCurrentStock = result.recordset.map(item => ({
