@@ -3637,21 +3637,74 @@ app.delete("/api/purchases/:id", authenticateToken, async (req, res) => {
 
   try {
     const pool = await sql.connect(dbConfig);
-    const result = await pool
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    const purchaseExistsResult = await transaction
       .request()
       .input("purchaseId", sql.UniqueIdentifier, id)
-      .input("companyId", sql.UniqueIdentifier, companyId).query(`
-        UPDATE Purchases 
-        SET IsActive = 0, UpdatedAt = GETDATE()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT PurchaseID
+        FROM Purchases
         WHERE PurchaseID = @purchaseId AND CompanyID = @companyId AND IsActive = 1
       `);
 
-    if (result.rowsAffected[0] === 0) {
+    if (!purchaseExistsResult.recordset?.length) {
+      await transaction.rollback();
       return res.status(404).json({
         success: false,
         message: "Purchase not found",
       });
     }
+
+    const purchaseItemsResult = await transaction
+      .request()
+      .input("purchaseId", sql.UniqueIdentifier, id)
+      .query(`
+        SELECT ItemID, PurchaseQty
+        FROM PurchaseItems
+        WHERE PurchaseID = @purchaseId
+      `);
+
+    const initialStockDeltas = new Map();
+    for (const row of purchaseItemsResult.recordset || []) {
+      const itemIdKey = String(row.ItemID || "");
+      const qty = Number(row.PurchaseQty || 0);
+      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
+        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) - qty);
+      }
+    }
+
+    for (const [itemIdKey, delta] of initialStockDeltas.entries()) {
+      if (!delta) continue;
+
+      const updateResult = await transaction
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("itemId", sql.UniqueIdentifier, itemIdKey)
+        .input("delta", sql.Decimal(18, 2), delta)
+        .query(`
+          UPDATE Items
+          SET InitialStock = ISNULL(InitialStock, 0) + @delta
+          WHERE ItemID = @itemId AND CompanyID = @companyId AND IsActive = 1
+        `);
+      if (updateResult.rowsAffected?.[0] === 0) {
+        throw new Error("Failed to update item stock. Item not found for this company.");
+      }
+    }
+
+    await transaction
+      .request()
+      .input("purchaseId", sql.UniqueIdentifier, id)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        UPDATE Purchases 
+        SET IsActive = 0, UpdatedAt = GETDATE()
+        WHERE PurchaseID = @purchaseId AND CompanyID = @companyId AND IsActive = 1
+      `);
+
+    await transaction.commit();
 
     res.json({
       success: true,
