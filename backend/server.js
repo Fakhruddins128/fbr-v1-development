@@ -146,6 +146,7 @@ const requireCompanyAccess = (req, res, next) => {
 app.get("/api/invoices", authenticateToken, async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
+    await ensurePurchasesSchema(pool);
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, req.user.companyId).query(`
@@ -2789,6 +2790,7 @@ app.post("/api/inventory", authenticateToken, async (req, res) => {
 
   try {
     const pool = await sql.connect(dbConfig);
+    await ensurePurchasesSchema(pool);
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, req.user.companyId)
@@ -3390,6 +3392,7 @@ app.post("/api/purchases", authenticateToken, async (req, res) => {
   }
 
   const pool = await sql.connect(dbConfig);
+  await ensurePurchasesSchema(pool);
   const transaction = new sql.Transaction(pool);
 
   try {
@@ -3409,15 +3412,17 @@ app.post("/api/purchases", authenticateToken, async (req, res) => {
       .input("status", sql.NVarChar, status || "pending")
       .input("createdBy", sql.UniqueIdentifier, req.user.userId).query(`
         INSERT INTO Purchases (
-          CompanyID, PONumber, PODate, CRNumber, Date, VendorID, VendorName, TotalAmount, Status, CreatedBy
+          CompanyID, PONumber, PODate, CRNumber, Date, VendorID, VendorName, TotalAmount, Status, CreatedBy, StockApplied
         )
         OUTPUT INSERTED.PurchaseID
         VALUES (
-          @companyId, @poNumber, @poDate, @crNumber, @date, @vendorId, @vendorName, @totalAmount, @status, @createdBy
+          @companyId, @poNumber, @poDate, @crNumber, @date, @vendorId, @vendorName, @totalAmount, @status, @createdBy, 1
         )
       `);
 
     const purchaseId = purchaseResult.recordset[0].PurchaseID;
+
+    const initialStockDeltas = new Map();
 
     // Insert purchase items
     for (const item of items) {
@@ -3436,6 +3441,29 @@ app.post("/api/purchases", authenticateToken, async (req, res) => {
             @purchaseId, @itemId, @itemName, @purchasePrice, @purchaseQty, @totalAmount
           )
         `);
+
+      const itemIdKey = String(item.itemId || "");
+      const qty = Number(item.purchaseQty || 0);
+      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
+        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) + qty);
+      }
+    }
+
+    for (const [itemIdKey, delta] of initialStockDeltas.entries()) {
+      const updateResult = await transaction
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("itemId", sql.UniqueIdentifier, itemIdKey)
+        .input("delta", sql.Decimal(18, 2), delta)
+        .query(`
+          UPDATE Items
+          SET InitialStock = ISNULL(InitialStock, 0) + @delta
+          WHERE ItemID = @itemId AND CompanyID = @companyId AND IsActive = 1
+        `);
+
+      if (updateResult.rowsAffected?.[0] === 0) {
+        throw new Error("Failed to update item stock. Item not found for this company.");
+      }
     }
 
     await transaction.commit();
@@ -3478,10 +3506,34 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
   }
 
   const pool = await sql.connect(dbConfig);
+  await ensurePurchasesSchema(pool);
   const transaction = new sql.Transaction(pool);
 
   try {
     await transaction.begin();
+
+    const oldItemsResult = await transaction
+      .request()
+      .input("purchaseId", sql.UniqueIdentifier, id)
+      .query(`
+        SELECT ItemID, PurchaseQty
+        FROM PurchaseItems
+        WHERE PurchaseID = @purchaseId
+      `);
+
+    const purchaseStateResult = await transaction
+      .request()
+      .input("purchaseId", sql.UniqueIdentifier, id)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT ISNULL(StockApplied, 0) AS StockApplied
+        FROM Purchases
+        WHERE PurchaseID = @purchaseId AND CompanyID = @companyId AND IsActive = 1
+      `);
+
+    const stockAlreadyApplied =
+      purchaseStateResult.recordset?.[0]?.StockApplied === true ||
+      purchaseStateResult.recordset?.[0]?.StockApplied === 1;
 
     // Update purchase
     const purchaseResult = await transaction
@@ -3505,6 +3557,7 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
           VendorName = @vendorName,
           TotalAmount = @totalAmount,
           Status = @status,
+          StockApplied = 1,
           UpdatedAt = GETDATE()
         WHERE PurchaseID = @purchaseId AND CompanyID = @companyId AND IsActive = 1
       `);
@@ -3523,6 +3576,18 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
       .input("purchaseId", sql.UniqueIdentifier, id)
       .query("DELETE FROM PurchaseItems WHERE PurchaseID = @purchaseId");
 
+    const initialStockDeltas = new Map();
+
+    if (stockAlreadyApplied) {
+      for (const row of oldItemsResult.recordset || []) {
+        const itemIdKey = String(row.ItemID || "");
+        const qty = Number(row.PurchaseQty || 0);
+        if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
+          initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) - qty);
+        }
+      }
+    }
+
     // Insert updated purchase items
     for (const item of items) {
       await transaction
@@ -3540,6 +3605,31 @@ app.put("/api/purchases/:id", authenticateToken, async (req, res) => {
             @purchaseId, @itemId, @itemName, @purchasePrice, @purchaseQty, @totalAmount
           )
         `);
+
+      const itemIdKey = String(item.itemId || "");
+      const qty = Number(item.purchaseQty || 0);
+      if (itemIdKey && Number.isFinite(qty) && qty !== 0) {
+        initialStockDeltas.set(itemIdKey, (initialStockDeltas.get(itemIdKey) || 0) + qty);
+      }
+    }
+
+    for (const [itemIdKey, delta] of initialStockDeltas.entries()) {
+      if (!delta) continue;
+
+      const updateResult = await transaction
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("itemId", sql.UniqueIdentifier, itemIdKey)
+        .input("delta", sql.Decimal(18, 2), delta)
+        .query(`
+          UPDATE Items
+          SET InitialStock = ISNULL(InitialStock, 0) + @delta
+          WHERE ItemID = @itemId AND CompanyID = @companyId AND IsActive = 1
+        `);
+
+      if (updateResult.rowsAffected?.[0] === 0) {
+        throw new Error("Failed to update item stock. Item not found for this company.");
+      }
     }
 
     await transaction.commit();
@@ -3978,6 +4068,16 @@ function isValidGuid(guid) {
   const guidRegex =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return guidRegex.test(guid);
+}
+
+async function ensurePurchasesSchema(pool) {
+  await pool.request().query(`
+    IF OBJECT_ID('Purchases', 'U') IS NOT NULL AND COL_LENGTH('Purchases', 'StockApplied') IS NULL
+    BEGIN
+      ALTER TABLE Purchases
+      ADD StockApplied BIT NOT NULL CONSTRAINT DF_Purchases_StockApplied DEFAULT 0;
+    END
+  `);
 }
 
 async function ensureVendorsSchema(pool) {

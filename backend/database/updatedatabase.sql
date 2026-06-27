@@ -694,6 +694,7 @@ BEGIN
     VendorName NVARCHAR(255) NOT NULL,
     TotalAmount DECIMAL(18, 2) NOT NULL CONSTRAINT DF_Purchases_TotalAmount DEFAULT 0,
     Status NVARCHAR(20) NOT NULL CONSTRAINT DF_Purchases_Status DEFAULT N'pending',
+    StockApplied BIT NOT NULL CONSTRAINT DF_Purchases_StockApplied DEFAULT 0,
     IsActive BIT NOT NULL CONSTRAINT DF_Purchases_IsActive DEFAULT 1,
     CreatedAt DATETIME NOT NULL CONSTRAINT DF_Purchases_CreatedAt DEFAULT GETDATE(),
     UpdatedAt DATETIME NOT NULL CONSTRAINT DF_Purchases_UpdatedAt DEFAULT GETDATE(),
@@ -718,6 +719,13 @@ IF COL_LENGTH('dbo.Purchases', 'Date') IS NULL
 BEGIN
   ALTER TABLE dbo.Purchases ADD Date DATE NULL;
   PRINT 'Purchases.Date added.';
+END
+GO
+
+IF COL_LENGTH('dbo.Purchases', 'StockApplied') IS NULL
+BEGIN
+  ALTER TABLE dbo.Purchases ADD StockApplied BIT NOT NULL CONSTRAINT DF_Purchases_StockApplied_Alt DEFAULT 0;
+  PRINT 'Purchases.StockApplied added.';
 END
 GO
 
